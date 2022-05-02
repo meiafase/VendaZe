@@ -308,7 +308,7 @@ app.get("/listarEstoqueEntrada", async (req, res) => {
     return res.send(estoque);
 });
 
-app.get("/teste", async (req, res) => {
+app.get("/listarQuantidadeEstoque", async (req, res) => {
     const estoque = await Estoque.findAll({
 	
         attributes: ['descricaoProduto', [sequelize.fn('count', sequelize.col('descricaoProduto')), 'Total em Estoque']],
@@ -317,8 +317,6 @@ app.get("/teste", async (req, res) => {
       });
     return res.send(estoque);
 });
-
-
 
 app.listen(8080, () => {
     console.log("Servidor rodando!");
