@@ -8,7 +8,7 @@ const NFCompra = require('../models/NFCompra');
 const NFVenda = require('../models/NFVenda');
 const ItemVenda = require('../models/ItemVenda');
 const Estoque = require('../models/Estoque');
-
+const { Op } = require("sequelize");
 const sequelize = require('../models/db.js');
 
 
@@ -188,6 +188,7 @@ app.post("/cadastrarItemCompra", async (req, res) => {
         raw: true,
         limit: 1,
     });
+
     const idItemCompra = itemcompra[0].idItemCompra;
     const descricaoProduto = itemcompra[0].descricaoProduto;
     const tipoMovimentacao = "E";
@@ -211,7 +212,6 @@ app.get("/listarItemVenda", async (req, res) => {
 });
 
 app.post("/cadastrarItemVenda", async (req, res) => {
-    console.log(req.body);
     await ItemVenda.create(req.body)
     .then(() => {
         res.send("Item Venda cadastrada com sucesso!");
@@ -233,12 +233,13 @@ app.post("/cadastrarItemVenda", async (req, res) => {
     const descricaoProduto = itemvenda[0].descricaoProduto;
     const tipoMovimentacao = "S";
 
-    await Estoque.create({idItemVenda, descricaoProduto, tipoMovimentacao})
-    .then(() => {
-        console.log("Estoque cadastrado");
-    }).catch(() => {
-        res.send("ERRO! Estoque");
-    });
+    await Estoque.update({idItemVenda, tipoMovimentacao}, {
+        where : {
+            [Op.and]: [{ tipoMovimentacao: "E" }, { descricaoProduto }],
+        },
+        limit: 1
+        
+    })
 });
 
 // APP - NF Compra <-----
@@ -312,7 +313,9 @@ app.get("/listarQuantidadeEstoque", async (req, res) => {
     const estoque = await Estoque.findAll({
 	
         attributes: ['descricaoProduto', [sequelize.fn('count', sequelize.col('descricaoProduto')), 'Total em Estoque']],
-	
+        where: {
+            tipoMovimentacao: "E"
+        },
         group : ['descricaoProduto']
       });
     return res.send(estoque);
