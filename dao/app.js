@@ -8,6 +8,9 @@ const NFCompra = require('../models/NFCompra');
 const NFVenda = require('../models/NFVenda');
 const ItemVenda = require('../models/ItemVenda');
 const Estoque = require('../models/Estoque');
+const ContasPagar = require('../models/ContasPagar');
+const Baixa = require('../models/Baixa');
+const Parcela = require('../models/Parcela');
 const { Op } = require("sequelize");
 const sequelize = require('../models/db.js');
 
@@ -180,7 +183,7 @@ app.post("/cadastrarItemCompra", async (req, res) => {
 
     const itemcompra = await ItemCompra.findAll({
         attributes: [
-            'idItemCompra', 'descricaoProduto',
+            'idItemCompra', 'descricaoProduto', 'valorUnitario',
         ],
         order: [
             ['idItemCompra', 'DESC'],
@@ -320,6 +323,120 @@ app.get("/listarQuantidadeEstoque", async (req, res) => {
       });
     return res.send(estoque);
 });
+
+
+// APP - Contas a Pagar <-----
+// APP - Contas a Pagar <-----
+// APP - Contas a Pagar <-----
+
+app.post("/gerarContasPagar", async (req, res) => {
+    console.log(req.body);
+    await ContasPagar.create(req.body)
+    .then(() => {
+        res.send("Contas a Pagar cadastrada com sucesso!");
+    }).catch(() => {
+        res.send("ERRO! Contas a pagar NÂO cadastrada")
+    });
+
+    const contasPagar = await ContasPagar.findAll({
+        attributes: [
+            'id',
+        ],
+        order: [
+            ['id', 'DESC'],
+        ],
+        raw: true,
+        limit: 1,
+    });
+
+        var condicao = req.body.nParcelas;
+        var idTitulo = contasPagar[0].id;
+        var vencimento = new Date(req.body.dataEmissao);
+        var valorTotal = req.body.valor;
+        var valor = valorTotal / condicao;
+        var juros = 2;
+        var multa = 10;
+        var liquido = req.body.valor;
+        var status = "Aberto";
+        var soma = 30;
+
+        for(var numero = 1; numero <= condicao; numero++){
+            vencimento.setDate(vencimento.getDate() + 30);
+
+            await Parcela.create({
+                idTitulo, 
+                numero, 
+                vencimento,
+                valor,
+                juros,
+                multa,
+                liquido,
+                status
+            });
+
+            soma = soma + 30;
+        }
+
+});
+
+app.get("/listarContasPagar", async (req, res) => {
+    const contasPagar = await ContasPagar.findAll({
+        attributes: [
+            'id', 'idNFCompra', 'valor','dataEmissao','nParcelas'
+        ]
+    });
+    return res.send(contasPagar);
+});
+
+
+// APP - Parcela <-----
+// APP - Parcela <-----
+// APP - Parcela <-----
+
+
+app.get("/listarParcelas", async (req, res) => {
+    const parcela = await Parcela.findAll({
+        attributes: [
+            'id', 'idTitulo', 'numero','Vencimento','status'
+        ]
+    });
+
+    
+    return res.send(parcela);
+});
+
+app.post("/baixarParcela", async (req, res) => {
+
+    var idParcela = req.body.idParcela;
+    const parcela = await Parcela.findAll({
+        attributes: [
+            'id', 'idTitulo', 'numero', 'Vencimento', 'valor', 'status'
+        ],
+        where: {
+            id: idParcela
+        }
+    });
+
+    var idTitulo = contasPagar[0].id;
+
+
+    await Parcela.update({status}, {
+        where : {
+            id: req.params.id
+        }
+    })
+    .then(() => {
+        res.send("Parcela Baixada!");
+    });
+});
+
+
+
+
+
+
+
+
 
 app.listen(8080, () => {
     console.log("Servidor rodando!");
