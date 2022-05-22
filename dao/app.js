@@ -13,6 +13,7 @@ const Baixa = require('../models/Baixa');
 const Parcela = require('../models/Parcela');
 const { Op } = require("sequelize");
 const sequelize = require('../models/db.js');
+const { status } = require('express/lib/response');
 
 
 
@@ -408,26 +409,92 @@ app.get("/listarParcelas", async (req, res) => {
 app.post("/baixarParcela", async (req, res) => {
 
     var idParcela = req.body.idParcela;
+    var valorPago = req.body.valor;
+    var dataPagamento = new Date(req.body.dataBaixa);
+    var formaPagamento = req.body.formaPagamento;
+
     const parcela = await Parcela.findAll({
         attributes: [
-            'id', 'idTitulo', 'numero', 'Vencimento', 'valor', 'status'
+            'id', 'idTitulo', 'numero', 'vencimento', 'valor', 'juros', 'multa', 'status'
         ],
         where: {
             id: idParcela
         }
     });
 
-    var idTitulo = contasPagar[0].id;
+    var idTitulo = parcela[0].id;
+    var valorTitulo = parcela[0].valor;
+    var vencimento = new Date(parcela[0].vencimento);
+    var juros = parcela[0].juros;
+    var multa = parcela[0].multa;
 
+    var resultado = vencimento - dataPagamento;
 
-    await Parcela.update({status}, {
-        where : {
-            id: req.params.id
+    var contMulta = (resultado / 1000 / 60 / 60 / 24) * (-1);
+
+    console.log(contMulta.toFixed(0) + "<--------------------------");
+
+     if(contMulta.toFixed(0) <= 0){
+         if(valorPago < valorTitulo){
+             var valor = valorTitulo - valorPago;
+             await Parcela.update({valor}, {
+                 where : {
+                     id: idTitulo
+                 }
+             })
+             .then(() => {
+                 res.send("Parcela parcialmente Baixada!");
+             });
+         }else{
+             var status = "Liquidado";
+             console.log("------------->  " + valorTitulo);
+             var valor = valorTitulo;
+             await Parcela.update({valor, status}, {
+                 where : {
+                     id: idTitulo
+                 }
+             })
+             .then(() => {
+                 res.send("Parcela Baixada!");
+             });
+                var dataBaixa = dataPagamento
+                var juros = 0;
+                var multa = 0;
+                await Baixa.create({idParcela, dataBaixa, valor, juros, multa, formaPagamento});
         }
-    })
-    .then(() => {
-        res.send("Parcela Baixada!");
-    });
+
+     }else{
+        if(valorPago < valorTitulo){
+            var valor = valorTitulo - valorPago;
+            var juros = juros * contMulta.toFixed(0);
+            var valor = valor + juros + multa;
+
+            await Parcela.update({valor}, {
+                where : {
+                    id: idTitulo
+                }
+            })
+            .then(() => {
+                res.send("Parcela parcialmente Baixada! (Atraso)");
+            });
+        }else{
+            var status = "Liquidado";
+            var valor = valorTitulo;
+            await Parcela.update({status}, {
+                where : {
+                    id: idTitulo
+                }
+            })
+            .then(() => {
+                res.send("Parcela Baixada! (Atraso)");
+            });
+               var dataBaixa = dataPagamento;
+               await Baixa.create({idParcela, dataBaixa, valor, juros, multa, formaPagamento});
+       }
+     }
+
+
+    
 });
 
 
