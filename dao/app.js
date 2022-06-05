@@ -492,14 +492,67 @@ app.post("/baixarParcela", async (req, res) => {
                await Baixa.create({idParcela, dataBaixa, valor, juros, multa, formaPagamento});
        }
      }
+});
 
+app.get("/listarBaixas", async (req, res) => {
+    const baixas = await Baixa.findAll({
+        attributes: [
+            'id', 'idParcela', 'valor','juros','multa', 'formaPagamento'
+        ],
+        where: {
+            deletadoEm: null
+        }
+    });
 
-    
+    if(baixas == ""){
+        return res.send("Sem baixas disponíveis!");
+    }else{
+        return res.send(baixas);
+    }
 });
 
 
+app.delete("/deletarBaixa/:id", async (req, res) => {
 
+    var deletadoEm = new Date();
 
+    await Baixa.update({deletadoEm}, {
+        where : {
+            id: req.params.id
+        }
+    })
+    .then(() => {
+        res.send("Baixa deletada com sucesso!");
+    });
+
+    const baixas = await Baixa.findAll({
+        attributes: [
+            'id', 'idParcela', 'valor','juros','multa', 'formaPagamento'
+        ],
+        where: {
+            id: req.params.id
+        }
+    });
+    var idParcela = baixas[0].idParcela;
+
+    const parcela = await Parcela.findAll({
+        attributes: [
+            'id', 'idTitulo', 'numero', 'vencimento', 'valor', 'juros', 'multa', 'status'
+        ],
+        where: {
+            id: idParcela
+        }
+    });
+
+    var id = parcela[0].id;
+
+    var status = "Aberto";
+    await Parcela.update({status}, {
+        where : {
+            id: id
+        }
+    });
+});
 
 
 

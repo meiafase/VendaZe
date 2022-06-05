@@ -31,6 +31,10 @@ const Baixa = db.define('baixa', {
         type: Sequelize.FLOAT,
         allowNull: false
     },
+    deletadoEm: {
+        type: Sequelize.DATEONLY,
+        allowNull: true
+    },
     formaPagamento:{
         type: Sequelize.STRING,
         allowNull: false
