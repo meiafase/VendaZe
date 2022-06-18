@@ -10,7 +10,10 @@ const ItemVenda = require('../models/ItemVenda');
 const Estoque = require('../models/Estoque');
 const ContasPagar = require('../models/ContasPagar');
 const Baixa = require('../models/Baixa');
+const BaixaReceber = require('../models/BaixaReceber');
 const Parcela = require('../models/Parcela');
+const ParcelaReceber = require('../models/ParcelaReceber');
+const ContasReceber = require('../models/ContasReceber');
 const { Op } = require("sequelize");
 const sequelize = require('../models/db.js');
 const { status } = require('express/lib/response');
@@ -555,7 +558,226 @@ app.delete("/deletarBaixa/:id", async (req, res) => {
 });
 
 
+app.get("/listarContasReceber", async (req, res) => {
+    const contasReceber = await ContasReceber.findAll({
+        attributes: [
+            'id', 'idNFVenda', 'valor','dataEmissao','nParcelas'
+        ]
+    });
+    return res.send(contasReceber);
+});
 
+
+app.post("/gerarContasReceber", async (req, res) => {
+    await ContasReceber.create(req.body)
+    .then(() => {
+        res.send("Contas a Pagar cadastrada com sucesso!");
+    }).catch(() => {
+        res.send("ERRO! Contas a pagar NÂO cadastrada")
+    });
+
+    const contasReceber = await ContasReceber.findAll({
+        attributes: [
+            'id',
+        ],
+        order: [
+            ['id', 'DESC'],
+        ],
+        raw: true,
+        limit: 1,
+    });
+
+        var condicao = req.body.nParcelas;
+        var idTitulo = contasReceber[0].id;
+        var vencimento = new Date(req.body.dataEmissao);
+        var valorTotal = req.body.valor;
+        var valor = valorTotal / condicao;
+        var juros = 2;
+        var multa = 10;
+        var liquido = req.body.valor;
+        var status = "Aberto";
+        var soma = 30;
+
+        for(var numero = 1; numero <= condicao; numero++){
+            vencimento.setDate(vencimento.getDate() + 30);
+
+            await ParcelaReceber.create({
+                idTitulo, 
+                numero, 
+                vencimento,
+                valor,
+                juros,
+                multa,
+                liquido,
+                status
+            });
+
+            soma = soma + 30;
+        }
+
+});
+
+
+app.get("/listarParcelasReceber", async (req, res) => {
+    const parcelaReceber = await ParcelaReceber.findAll({
+        attributes: [
+            'id', 'idTitulo', 'numero','Vencimento','status'
+        ]
+    });
+
+    
+    return res.send(parcelaReceber);
+});
+
+app.post("/baixarParcelaReceber", async (req, res) => {
+
+    var idParcela = req.body.idParcela;
+    var valorPago = req.body.valor;
+    var dataPagamento = new Date(req.body.dataBaixa);
+    var formaPagamento = req.body.formaPagamento;
+
+    const parcelaReceber = await ParcelaReceber.findAll({
+        attributes: [
+            'id', 'idTitulo', 'numero', 'vencimento', 'valor', 'juros', 'multa', 'status'
+        ],
+        where: {
+            id: idParcela
+        }
+    });
+
+    var idTitulo = parcelaReceber[0].id;
+    var valorTitulo = parcelaReceber[0].valor;
+    var vencimento = new Date(parcelaReceber[0].vencimento);
+    var juros = parcelaReceber[0].juros;
+    var multa = parcelaReceber[0].multa;
+
+    var resultado = vencimento - dataPagamento;
+
+    var contMulta = (resultado / 1000 / 60 / 60 / 24) * (-1);
+
+    console.log(contMulta.toFixed(0) + "<--------------------------");
+
+     if(contMulta.toFixed(0) <= 0){
+         if(valorPago < valorTitulo){
+             var valor = valorTitulo - valorPago;
+             await ParcelaReceber.update({valor}, {
+                 where : {
+                     id: idTitulo
+                 }
+             })
+             .then(() => {
+                 res.send("Parcela parcialmente Baixada!");
+             });
+         }else{
+             var status = "Liquidado";
+             console.log("------------->  " + valorTitulo);
+             var valor = valorTitulo;
+             await ParcelaReceber.update({valor, status}, {
+                 where : {
+                     id: idTitulo
+                 }
+             })
+             .then(() => {
+                 res.send("Parcela Baixada!");
+             });
+                var dataBaixa = dataPagamento
+                var juros = 0;
+                var multa = 0;
+                await BaixaReceber.create({idParcela, dataBaixa, valor, juros, multa, formaPagamento});
+        }
+
+     }else{
+        if(valorPago < valorTitulo){
+            var valor = valorTitulo - valorPago;
+            var juros = juros * contMulta.toFixed(0);
+            var valor = valor + juros + multa;
+
+            await ParcelaReceber.update({valor}, {
+                where : {
+                    id: idTitulo
+                }
+            })
+            .then(() => {
+                res.send("Parcela parcialmente Baixada! (Atraso)");
+            });
+        }else{
+            var status = "Liquidado";
+            var valor = valorTitulo;
+            await ParcelaReceber.update({status}, {
+                where : {
+                    id: idTitulo
+                }
+            })
+            .then(() => {
+                res.send("Parcela Baixada! (Atraso)");
+            });
+               var dataBaixa = dataPagamento;
+               await BaixaReceber.create({idParcela, dataBaixa, valor, juros, multa, formaPagamento});
+       }
+     }
+});
+
+
+app.delete("/deletarBaixaReceber/:id", async (req, res) => {
+
+    var deletadoEm = new Date();
+
+    await BaixaReceber.update({deletadoEm}, {
+        where : {
+            id: req.params.id
+        }
+    })
+    .then(() => {
+        res.send("Baixa deletada com sucesso!");
+    });
+
+    const baixaRecebers = await BaixaReceber.findAll({
+        attributes: [
+            'id', 'idParcela', 'valor','juros','multa', 'formaPagamento'
+        ],
+        where: {
+            id: req.params.id
+        }
+    });
+    var idParcela = baixaRecebers[0].idParcela;
+
+    const parcelaReceber = await ParcelaReceber.findAll({
+        attributes: [
+            'id', 'idTitulo', 'numero', 'vencimento', 'valor', 'juros', 'multa', 'status'
+        ],
+        where: {
+            id: idParcela
+        }
+    });
+
+    var id = parcelaReceber[0].id;
+
+    var status = "Aberto";
+    await ParcelaReceber.update({status}, {
+        where : {
+            id: id
+        }
+    });
+});
+
+
+
+app.get("/listarBaixasReceber", async (req, res) => {
+    const baixasReceber = await BaixaReceber.findAll({
+        attributes: [
+            'id', 'idParcela', 'valor','juros','multa', 'formaPagamento'
+        ],
+        where: {
+            deletadoEm: null
+        }
+    });
+
+    if(baixasReceber == ""){
+        return res.send("Sem baixas disponíveis!");
+    }else{
+        return res.send(baixasReceber);
+    }
+});
 
 
 app.listen(8080, () => {
